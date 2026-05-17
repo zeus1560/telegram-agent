@@ -1,0 +1,11 @@
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M20 28H3L4.65723 9H18.3428C18.7823 9 19.2038 9.16817 19.5146 9.46752C19.8254 9.76687 20 10.1729 20 10.5962V28Z" fill="#C5E8E8" stroke="#212529" stroke-width="1.2"/>
+<path d="M37 28H20V10.5962C19.9999 10.1773 20.1709 9.77514 20.4759 9.47653C20.7809 9.17791 21.1956 9.00676 21.6305 9H35.4497L37 28Z" fill="#C5E8E8" stroke="#212529" stroke-width="1.2"/>
+<line x1="8.6" y1="14.4" x2="15.4" y2="14.4" stroke="#212529" stroke-width="1.2" stroke-linecap="round"/>
+<line x1="8.1" y1="18.4" x2="15.4" y2="18.4" stroke="#212529" stroke-width="1.2" stroke-linecap="round"/>
+<line x1="7.6" y1="22.4" x2="15.4" y2="22.4" stroke="#212529" stroke-width="1.2" stroke-linecap="round"/>
+<line x1="24.6" y1="14.4" x2="31.4" y2="14.4" stroke="#212529" stroke-width="1.2" stroke-linecap="round"/>
+<line x1="24.6" y1="18.4" x2="27.4" y2="18.4" stroke="#212529" stroke-width="1.2" stroke-linecap="round"/>
+<path d="M37 31H22.1781C21.6004 31 21.0464 30.684 20.638 30.1213C20.2295 29.5587 20 28.7956 20 28H36.9469V29.5L37 31Z" fill="white" stroke="#212529" stroke-width="1.2"/>
+<path d="M3 28H20C20 28.7956 19.7691 29.5587 19.358 30.1213C18.947 30.684 18.3895 31 17.8082 31H3V28Z" fill="white" stroke="#212529" stroke-width="1.2"/>
+</svg>

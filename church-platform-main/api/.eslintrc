@@ -1,0 +1,30 @@
+{
+  "extends": ["airbnb-base","prettier"],
+  "root":true,
+  "rules": {
+      "brace-style": [
+          0,
+          "1tbs"
+      ],
+      "comma-dangle": [
+          "error",
+          "never"
+      ],
+      "no-unused-vars": [
+          "warn",
+          { "argsIgnorePattern": "^_"}
+      ],
+      "no-var": [
+          "off"
+      ],
+      "one-var": [
+          "off"
+      ],
+      "implicit-arrow-linebreak": 0,
+      "object-curly-newline": 0,
+      "no-plusplus": 0,
+      "operator-linebreak": 0,
+      "no-console": 0,
+      "no-await-in-loop": 0
+  }
+}

@@ -1,0 +1,5 @@
+.storybook/
+build/
+storybook-static/
+public/
+*.yml

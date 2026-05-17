@@ -1,0 +1,12 @@
+# directories
+build/
+coverage/
+logs/
+node_modules/
+uploads/
+
+# files
+.DS_Store
+config/local.js
+version.json
+dev_server_dump.sql

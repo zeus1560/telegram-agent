@@ -1,0 +1,51 @@
+{
+  "name": "platform-admin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@emotion/react": "^11.10.6",
+    "@emotion/styled": "^11.10.6",
+    "@mui/icons-material": "^5.11.16",
+    "@mui/material": "^5.11.9",
+    "@tanstack/react-query": "^4.29.7",
+    "ag-grid-community": "^29.3.5",
+    "ag-grid-enterprise": "^29.3.5",
+    "ag-grid-react": "^29.3.5",
+    "axios": "^1.4.0",
+    "moment": "^2.29.4",
+    "prop-types": "^15.8.1",
+    "query-string": "^8.1.0",
+    "quill-better-table": "^1.2.10",
+    "quill-image-drop-and-paste": "^1.2.10",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-error-boundary": "^4.0.10",
+    "react-hook-form": "^7.43.9",
+    "react-hot-toast": "^2.4.1",
+    "react-image-file-resizer": "^0.4.8",
+    "react-quill-2": "^2.0.2",
+    "react-router-dom": "^6.8.1",
+    "recoil": "^0.7.6",
+    "sass": "^1.63.4",
+    "swr": "^2.1.5"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint --ext tsx,jsx,ts,js .",
+    "prettier": "prettier --check ."
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "eslint": "^8.34.0",
+    "eslint-config-airbnb": "^19.0.4",
+    "eslint-config-prettier": "^8.6.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "eslint-plugin-react": "^7.32.2",
+    "prettier": "^2.8.4",
+    "vite": "^6.1.0",
+    "vite-plugin-svgr": "^4.3.0"
+  }
+}

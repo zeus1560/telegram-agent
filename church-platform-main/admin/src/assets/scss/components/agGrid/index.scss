@@ -1,0 +1,30 @@
+.ag-theme-alpine {
+  --ag-font-size: 14px;
+  --ag-font-weight: 500;
+
+  --ag-header-background-color: #f8f8f8;
+  --ag-header-column-separator-display: block;
+  --ag-header-column-separator-height: 100%;
+  --ag-header-column-separator-width: 1px;
+  --ag-header-column-separator-color: #999999;
+  --ag-header-column-separator-style: dashed;
+
+  --ag-row-border-style: dashed;
+  --ag-list-item-height: 49px;
+
+  --ag-header-background-color: #f8f8f8;
+
+  --ag-background-color: #ffffff;
+
+  .ag-header-cell {
+    font-weight: 500;
+    font-size: 14px;
+    color: #999999;
+  }
+}
+
+.ag-theme-alpine .ag-header-cell {
+  font-weight: 500;
+  font-size: 14px;
+  color: #999999;
+}
