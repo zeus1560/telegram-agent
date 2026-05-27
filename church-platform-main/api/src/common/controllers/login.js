@@ -94,7 +94,7 @@ module.exports.login = (req, res, next) => {
       const userRes = _.pick(user, ['id', 'name', 'mail', 'admin']);
 
       const token = jwt.sign({ id: user.id }, config.JWT.JWT_SECRET, {
-        expiresIn: '30d'
+        expiresIn: '1d'
       });
 
       return res.send({ token, user: userRes });
