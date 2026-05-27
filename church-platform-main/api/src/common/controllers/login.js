@@ -264,6 +264,6 @@ module.exports.logout = (req, res) => {
  *         description: 인증 필요
  */
 module.exports.profile = (req, res) => {
-  const userRes = _.pick(req.user, ['id', 'name', 'mail', 'admin']);
+  const userRes = _.pick(req.user, ['id', 'name', 'mail', 'admin', 'phone']);
   res.send(userRes);
 };
