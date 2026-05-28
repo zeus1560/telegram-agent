@@ -1,7 +1,7 @@
 {
   "name": "platform-api",
   "version": "1.0.0",
-  "description": "Church Platform",
+  "description": "Church Platform API Server",
   "scripts": {
     "start": "node src/init.js",
     "dev": "nodemon src/init.js",
