@@ -5,19 +5,19 @@ export const boardApi = {
   basicAdd: (menuId, info) =>
     axiosInstance.post(`/board/menu/${menuId}/basic`, info, {
       headers: {
-        'Content-Type': `multipart/form-data`,
+        'Content-Type': `application/json`,
       },
     }),
   addImage: (menuId, info) =>
     axiosInstance.post(`/board/menu/${menuId}/basic/images`, info, {
       headers: {
-        'Content-Type': `multipart/form-data`,
+        'Content-Type': `application/json`,
       },
     }),
   update: (menuId, boardId, info) =>
     axiosInstance.put(`/board/menu/${menuId}/basic/${boardId}`, info, {
       headers: {
-        'Content-Type': `multipart/form-data`,
+        'Content-Type': `application/json`,
       },
     }),
   detail: (menuId, boardId) =>
