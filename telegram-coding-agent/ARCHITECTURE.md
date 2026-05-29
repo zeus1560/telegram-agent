@@ -27,7 +27,7 @@ PC 앞에 없어도 스마트폰으로 로컬 프로젝트를 수정하고 커�
   └─────┬──────┘
         │
         ▼
-[ AI Step 1 — llama-3.1-8b-instant ]
+[ AI Shim (라우팅 에이전트) — llama-3.1-8b-instant ]
   입력: 자연어 명령 + 프로젝트 파일 경로 목록
   출력: 수정 대상 파일 경로 OR clarification_needed
         │
@@ -36,7 +36,7 @@ PC 앞에 없어도 스마트폰으로 로컬 프로젝트를 수정하고 커�
   파일 읽기 / 없으면 fuzzySearch로 후보 3개 제안
         │
         ▼
-[ AI Step 2 — llama-3.3-70b-versatile ]
+[ AI Shim (코딩 에이전트) — llama-3.3-70b-versatile ]
   입력: 실제 파일 내용 + 수정 의도
   출력: originalSnippet → newSnippet 변경 명세 + commitMessage
         │

@@ -175,10 +175,62 @@ Invoke this skill after both Skill 1 and Skill 2 have been signed off, or when t
 
 ---
 
+## Skill 4 — Feature Extension (기능 확장)
+
+**Purpose:** 기존 Telegram 봇에 새 커맨드·콜백·AI 로직을 추가할 때, 보안·Lock·등록 순서를 누락 없이 체크하도록 안내하는 가이드.
+
+### Activation
+
+다음 중 하나에 해당할 때 이 스킬을 호출한다:
+- "새 커맨드 추가해줘", "기능 추가", "/슬래시 커맨드 만들어줘" 요청
+- 기존 커맨드의 동작 방식 변경 요청
+- AI Shim 호출 방식이나 프롬프트를 바꾸는 요청 (`prompt_engineer` 스킬과 함께 사용)
+
+### Procedure
+
+1. **요구사항 파악** — 커맨드명, 인자, 예상 응답을 확정한다. 불명확 시 Conceptual Inquiry.
+2. **구현 위치 결정** — 아래 표 기준으로 판단. 불확실 시 Conceptual Inquiry.
+
+| 기능 유형 | 주 구현 위치 |
+|-----------|-------------|
+| 단순 /커맨드 (AI 호출 없음) | `botHandlers.js` → `registerHandlers()` |
+| AI 호출 포함 / 복잡한 흐름 | `orchestrator.js` 새 함수 + `botHandlers.js` 진입점 |
+| 파일 조작 추가 | `fileOps.js` 함수 추가 후 재사용 |
+| AI 프롬프트 수정 | `prompt_engineer` 스킬 먼저 호출 후 진행 |
+
+3. **구현 전 설계 컨펌** — Conceptual Inquiry로 접근 방식 확인 후 코딩 시작.
+4. **필수 체크리스트 실행** (아래).
+5. **테스트 시나리오 제시** — 정상 케이스 + 최소 1개 에러 케이스 확인 방법 안내.
+
+### 필수 체크리스트 (모든 신규 커맨드)
+
+```
+□ isAuthorized(ctx.from.id) — 핸들러 최상단 첫 번째 줄 필수
+□ Lock 체크 — 작업 포함 커맨드면 lock.get().isLocked 확인
+□ bot.command() — botHandlers.js registerHandlers() 안에 등록
+□ /cancel 로 취소 가능한지 확인 (lock 사용 커맨드)
+□ /status 응답에 영향 없는지 확인
+□ .env.example — 새 환경변수 필요 시 추가
+□ PRD.md Section 7 커맨드 목록 업데이트
+```
+
+### Constraints
+
+- Skill 1~3의 sign-off 없이 단독 호출 가능하다 (기존 프로젝트에 추가하는 경우).
+- 새 기능이 기존 Lock 흐름이나 보안 정책에 영향을 주면 반드시 Conceptual Inquiry를 발동한다.
+- AI Shim 프롬프트 수정이 수반되는 경우 `prompt_engineer` 스킬을 먼저 완료한 후 이 스킬을 진행한다.
+
+---
+
 ## Skill Execution Order
 
 ```
+신규 프로젝트:
 Skill 1 (Flow)  ──sign-off──▶  Skill 2 (Stack)  ──sign-off──▶  Skill 3 (PRD)  ──approved──▶  Implementation
+
+기존 프로젝트 기능 추가:
+                                                                               Skill 4 (Feature Extension)  ──▶  Implementation
+                                                                               (Skill 1~3 sign-off 불필요)
 ```
 
 Skills may be revisited in any order if the user requests a change, but every revisit resets the downstream sign-offs.
@@ -207,13 +259,15 @@ Skills may be revisited in any order if the user requests a change, but every re
 
 ### 기술 스택 (Skill 2)
 
-| Layer         | 확정 기술                             |
-|---------------|---------------------------------------|
-| 런타임        | Node.js 18+                           |
-| Telegram 봇   | Telegraf v4                           |
-| AI Shim LLM   | @anthropic-ai/sdk (claude-sonnet-4-6) |
-| Git           | simple-git                            |
-| Diff          | diff (npm)                            |
-| 환경변수      | dotenv                                |
+| Layer         | 확정 기술                                                     |
+|---------------|---------------------------------------------------------------|
+| 런타임        | Node.js 18+                                                   |
+| Telegram 봇   | Telegraf v4                                                   |
+| AI Shim LLM   | groq-sdk (1차: llama-3.1-8b-instant / 2차: llama-3.3-70b-versatile) |
+| Git           | simple-git                                                    |
+| Diff          | diff (npm)                                                    |
+| 환경변수      | dotenv                                                        |
+
+> **LLM 선택 이유:** Claude API 대비 Groq이 무료 티어 제공 → 운영 비용 0원. 코드 수정 정확도는 llama-3.3-70b-versatile로 충분히 확보.
 
 **전체 상세 스펙 + Task 분할:** [PRD.md](PRD.md) (Status: Approved, v1.0)

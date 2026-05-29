@@ -1,88 +1,88 @@
+/**
+ * @fileoverview Groq LLM 호출 어댑터.
+ * 사용자 자연어 명령을 두 단계 AI 호출로 변환해 ShimResult JSON을 반환한다.
+ *   1단계: identifyTargetFiles — 수정 대상 파일 식별 (llama-3.1-8b-instant)
+ *   2단계: generateChanges   — 실제 코드 변경 생성 (llama-3.3-70b-versatile)
+ */
 const Groq = require('groq-sdk');
+const { INTENT_PROMPT, CHANGES_PROMPT, ANALYZE_PROMPT } = require('./prompts');
 
-const MAX_FILE_LINES = 150;
-const MAX_TREE_LINES = 100;
-
-function truncateContent(content) {
-  const lines = content.split('\n');
-  if (lines.length <= MAX_FILE_LINES) return content;
-  return lines.slice(0, MAX_FILE_LINES).join('\n') + '\n// ... (이하 생략)';
-}
-
-function truncateTree(tree) {
-  const lines = tree.split('\n');
-  if (lines.length <= MAX_TREE_LINES) return tree;
-  return lines.slice(0, MAX_TREE_LINES).join('\n') + '\n... (이하 생략)';
-}
+/** LLM 컨텍스트 절약: 파일 내용은 최대 이 줄 수만 전송한다. */
+const CONTENT_LINE_LIMIT = 150;
+/** LLM 컨텍스트 절약: 파일 트리는 최대 이 줄 수만 전송한다. */
+const TREE_LINE_LIMIT = 100;
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-const INTENT_PROMPT = `당신은 코드 수정 의도 분석기입니다.
-사용자 명령과 아래 파일 목록을 보고 어떤 파일을 수정해야 하는지 파악하세요.
-반드시 순수 JSON만 반환하세요. 마크다운 코드 블록 금지.
-
-중요 규칙:
-- targetFiles에는 반드시 아래 "존재하는 파일 목록"에 있는 경로만 그대로 사용하세요.
-- 목록에 없는 경로를 절대 만들거나 추측하지 마세요.
-- 사용자가 파일명을 직접 언급했다면 목록에서 해당 이름을 찾아 정확한 경로를 사용하세요.
-- 어떤 파일인지 불분명하면 clarification_needed를 반환하세요.
-
-스키마:
-{
-  "status": "ok" | "clarification_needed",
-  "clarificationQuestion": "string (clarification_needed일 때만)",
-  "targetFiles": ["목록에 있는 정확한 상대경로"],
-  "description": "변경 내용 한 줄 요약"
-}`;
-
-const CHANGES_PROMPT = `당신은 코드 수정 전문가입니다.
-아래 파일 내용을 직접 보고 정확한 수정 코드를 생성하세요.
-반드시 순수 JSON만 반환하세요. 마크다운 코드 블록 금지.
-
-스키마:
-{
-  "changes": [
-    {
-      "file": "상대경로/파일.js",
-      "type": "replace" | "insert" | "delete",
-      "targetIdentifier": "함수명 또는 위치 힌트",
-      "originalSnippet": "파일에서 정확히 찾을 수 있는 변경 전 코드",
-      "newSnippet": "변경 후 코드"
-    }
-  ],
-  "commitMessage": "feat: 커밋 메시지"
+/**
+ * 파일 내용이 CONTENT_LINE_LIMIT을 초과하면 앞부분만 잘라 반환한다.
+ * @param {string} content 원본 파일 내용
+ * @returns {string}
+ */
+function truncateContent(content) {
+  const lines = content.split('\n');
+  if (lines.length <= CONTENT_LINE_LIMIT) return content;
+  return lines.slice(0, CONTENT_LINE_LIMIT).join('\n') + '\n// ... (이하 생략)';
 }
 
-규칙:
-- originalSnippet은 반드시 제공된 실제 파일 내용에서 그대로 복사한 문자열
-- 공백, 따옴표, 들여쓰기까지 완전히 일치해야 함
-- 수정 범위는 최소한으로 유지`;
+/**
+ * 파일 트리 문자열이 TREE_LINE_LIMIT을 초과하면 잘라 반환한다.
+ * @param {string} tree 파일 경로 목록 (줄 구분)
+ * @returns {string}
+ */
+function truncateTree(tree) {
+  const lines = tree.split('\n');
+  if (lines.length <= TREE_LINE_LIMIT) return tree;
+  return lines.slice(0, TREE_LINE_LIMIT).join('\n') + '\n... (이하 생략)';
+}
 
-const VALID_JSON_ESCAPES = new Set(['"', '\\', '/', 'b', 'f', 'n', 'r', 't', 'u']);
-
+/**
+ * AI 응답에서 마크다운 코드블록을 제거하고 JSON 파싱 전 문자열을 정규화한다.
+ * 무효 이스케이프 시퀀스와 trailing comma를 수정한다.
+ * @param {string} raw Groq 응답 원본 문자열
+ * @returns {string} JSON.parse 가능한 정리된 문자열
+ */
 function sanitizeJson(raw) {
-  // 마크다운 코드블록 제거
   let text = raw.trim()
     .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
 
-  // \x 형태를 한 쌍씩 읽어서: \\(유효) → 유지, \c(무효) → \\c 로 수정
-  text = text.replace(/\\([\s\S])/g, (match, char) => {
-    if (VALID_JSON_ESCAPES.has(char)) return match;
-    return '\\\\' + char;
+  // 유효 이스케이프(\uXXXX, \", \\, 등)는 유지, 그 외 무효 이스케이프는 리터럴로 변환
+  text = text.replace(/\\(u[0-9a-fA-F]{4}|["\\/bfnrt]|[\s\S])/g, (match, capture) => {
+    if (capture.length > 1 || /^["\\/bfnrt]$/.test(capture)) return match;
+    return '\\\\' + capture;
   });
 
+  // JSON 표준 위반인 trailing comma 제거 (AI가 자주 생성하는 패턴)
+  text = text.replace(/,\s*([}\]])/g, '$1');
   return text;
 }
 
+/**
+ * Groq API를 호출하고 응답을 JSON으로 파싱한다.
+ * 파싱 실패 시 clarification_needed 폴백 객체를 반환한다.
+ * @param {string} model Groq 모델 ID
+ * @param {string} systemPrompt 시스템 프롬프트
+ * @param {string} userContent 사용자 입력 내용
+ * @returns {Promise<object>}
+ */
 async function callGroq(model, systemPrompt, userContent) {
-  const response = await groq.chat.completions.create({
-    model,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userContent },
-    ],
-    temperature: 0,
-  });
+  let response;
+  try {
+    response = await groq.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent },
+      ],
+      temperature: 0,
+    });
+  } catch (err) {
+    if (err.status === 429) throw new Error('AI API 요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.');
+    if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT') {
+      throw new Error('AI API 서버에 연결할 수 없습니다. 네트워크 상태를 확인해 주세요.');
+    }
+    throw new Error(`AI API 호출 실패: ${err.message}`);
+  }
   const raw = response.choices[0].message.content;
   const text = sanitizeJson(raw);
   try {
@@ -90,27 +90,80 @@ async function callGroq(model, systemPrompt, userContent) {
   } catch (e) {
     console.error('[aiShim] JSON 파싱 실패:', e.message);
     console.error('[aiShim] 원본 응답:', raw.slice(0, 500));
-    throw new Error('AI 응답을 처리할 수 없습니다. 다시 시도해 주세요.');
+    return {
+      status: 'clarification_needed',
+      clarificationQuestion: '명령이 너무 모호합니다. 수정할 파일명과 변경 내용을 구체적으로 알려주세요.\n예) "src/App.jsx 파일의 버튼 색을 빨간색으로 바꿔줘"',
+      targetFiles: [],
+      description: '',
+    };
   }
 }
 
-async function identifyTargetFiles(userMessage, fileList) {
+/**
+ * 1단계 AI 호출 — 자연어 명령에서 수정 대상 파일과 액션을 식별한다.
+ * @param {string} userMessage 사용자 자연어 명령
+ * @param {string} fileList 프로젝트 파일 경로 목록 (줄 구분)
+ * @param {string} [historyContext=''] 이전 대화 기록 (파일 위치 파악 전용)
+ * @returns {Promise<{status: string, action: string, targetFiles: string[], description: string, clarificationQuestion: string}>}
+ */
+async function identifyTargetFiles(userMessage, fileList, historyContext = '') {
+  const historySection = historyContext
+    ? `\n\n[이전 대화 기록 — 파일 위치 파악 참고용]\n${historyContext}`
+    : '';
   return callGroq(
     'llama-3.1-8b-instant',
     INTENT_PROMPT,
-    `존재하는 파일 목록 (이 경로만 사용할 것):\n${fileList}\n\n명령: ${userMessage}`
+    `[존재하는 파일 목록 — 이 경로만 사용할 것]\n${truncateTree(fileList)}${historySection}\n\n[현재 명령 — 반드시 이것만 따를 것]\n${userMessage}`
   );
 }
 
-async function generateChanges(userMessage, description, fileContents) {
+/**
+ * 2단계 AI 호출 — 실제 파일 내용을 기반으로 구체적인 코드 변경을 생성한다.
+ * @param {string} userMessage 사용자 자연어 명령
+ * @param {string} description 1단계에서 식별된 변경 의도 요약
+ * @param {Object.<string, string>} fileContents 파일 경로 → 내용 맵
+ * @param {string} [historyContext=''] 이전 대화 기록 (파일 위치 참고 전용)
+ * @returns {Promise<{changes: Array<{file: string, type: string, originalSnippet: string, newSnippet: string}>, commitMessage: string}>}
+ */
+async function generateChanges(userMessage, description, fileContents, historyContext = '') {
   const filesSection = Object.entries(fileContents)
-    .map(([path, content]) => `=== ${path} ===\n${truncateContent(content)}`)
+    .map(([filePath, content]) => `=== ${filePath} ===\n${truncateContent(content)}`)
     .join('\n\n');
+  const historySection = historyContext
+    ? `\n\n[이전 대화 기록 — 파일 위치 참고 전용, 명령 해석에 사용 금지]\n${historyContext}`
+    : '';
   return callGroq(
     'llama-3.3-70b-versatile',
     CHANGES_PROMPT,
-    `명령: ${userMessage}\n수정 의도: ${description}\n\n실제 파일 내용:\n${filesSection}`
+    `[현재 명령 — 반드시 이것만 따를 것]\n${userMessage}\n\n[수정 의도]\n${description}${historySection}\n\n[실제 파일 내용]\n${filesSection}`
   );
 }
 
-module.exports = { identifyTargetFiles, generateChanges };
+/**
+ * /analyze 커맨드 — AI가 파일 품질을 분석한 한국어 보고서를 반환한다.
+ * @param {string} filePath 분석할 파일의 상대 경로
+ * @param {string} content 파일 내용
+ * @returns {Promise<string>} 카테고리별 분석 보고서 (텍스트)
+ */
+async function analyzeCode(filePath, content) {
+  let response;
+  try {
+    response = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: ANALYZE_PROMPT },
+        { role: 'user', content: `파일: ${filePath}\n\n${truncateContent(content)}` },
+      ],
+      temperature: 0.3,
+    });
+  } catch (err) {
+    if (err.status === 429) throw new Error('AI API 요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.');
+    if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT') {
+      throw new Error('AI API 서버에 연결할 수 없습니다. 네트워크 상태를 확인해 주세요.');
+    }
+    throw new Error(`AI API 호출 실패: ${err.message}`);
+  }
+  return response.choices[0].message.content;
+}
+
+module.exports = { identifyTargetFiles, generateChanges, analyzeCode };

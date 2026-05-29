@@ -5,9 +5,15 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop telegram-coding-agent",
+    "pm2:restart": "pm2 restart telegram-coding-agent",
+    "pm2:logs": "pm2 logs telegram-coding-agent",
+    "pm2:delete": "pm2 delete telegram-coding-agent"
   },
   "dependencies": {
+    "@notionhq/client": "^2.3.0",
     "diff": "^7.0.0",
     "dotenv": "^16.4.7",
     "groq-sdk": "^0.9.1",

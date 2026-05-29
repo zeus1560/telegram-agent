@@ -1,7 +1,9 @@
-# PRD — Telegram Remote Coding Agent  v1.0-Approved
+# PRD — Telegram Remote Coding Agent  v2.0-Approved
 **Author:** AI Engineering Manager  
-**Last updated:** 2026-05-18  
+**Last updated:** 2026-05-29  
 **Status:** Approved
+
+> **v2.0 변경 요약:** LLM 스택을 Anthropic → Groq(무료)으로 확정 반영. 구현 과정에서 추가된 확장 기능들(멀티 프로젝트, 이력 관리, 분석, npm 실행, Notion 로그, PM2 크래시 복구 등) 문서화.
 
 ---
 
@@ -60,7 +62,7 @@
 
 | ID     | Category    | Requirement                                                                              |
 |--------|-------------|------------------------------------------------------------------------------------------|
-| NFR-01 | Security    | `TELEGRAM_BOT_TOKEN`, `ALLOWED_USER_ID`, `ANTHROPIC_API_KEY`는 `.env`에만 저장, 코드 하드코딩 금지 |
+| NFR-01 | Security    | `TELEGRAM_BOT_TOKEN`, `ALLOWED_USER_ID`, `GROQ_API_KEY`는 `.env`에만 저장, 코드 하드코딩 금지 |
 | NFR-02 | Security    | 미등록 User ID 접근은 응답·로그 없이 완전 무시 (봇의 존재 자체를 노출하지 않음)         |
 | NFR-03 | Reliability | Lock으로 동시 작업을 차단해 파일 쓰기 충돌을 방지한다                                   |
 | NFR-04 | Reliability | 봇 프로세스 재시작 시 Lock이 자동 해제된다 (인메모리 상태, 영속화 불필요)                |
@@ -85,8 +87,9 @@
     ├─► isLocked = true
     │
     ▼
-[ AI Shim (Anthropic SDK — claude-sonnet-4-6) ]
-    │  입력: 자연어 명령 + 프로젝트 파일 트리
+[ AI Shim (Groq SDK — 2-step LLM 호출) ]
+    │  1차: llama-3.1-8b-instant  → 대상 파일 식별 (INTENT)
+    │  2차: llama-3.3-70b-versatile → 실제 코드 변경 생성 (CHANGES)
     │  출력: ShimResult JSON (§8 참조)
     │
     ├─ status=clarification_needed → 역질문 전송, isLocked=false, return
@@ -123,7 +126,7 @@ isLocked = false
 |-------------------|----------------------------------------|--------------------------------------------|
 | 언어 런타임       | Node.js 18+                            | 타겟 프로젝트(React+Node) 런타임 일치      |
 | Telegram 봇       | Telegraf v4                            | Node.js 표준, Long-polling 직관적          |
-| AI Shim LLM       | @anthropic-ai/sdk (claude-sonnet-4-6)  | 코드 이해 최상급, 구조화 출력 지원         |
+| AI Shim LLM       | groq-sdk (llama-3.1-8b / llama-3.3-70b) | 무료 티어 제공, 2-step 호출로 정확도 확보 |
 | Git 실행          | simple-git                             | 경량 래퍼, CLI 직접 호출 방식              |
 | 파일 Diff         | diff (npm)                             | unified diff 생성, Node.js 표준            |
 | 파일 시스템       | fs, path (Node.js 내장)                | 외부 의존성 없음                           |
@@ -154,11 +157,18 @@ telegram-coding-agent/
 
 ### 텔레그램 명령
 
-| 명령        | 설명                              | 봇 응답 예시                                 |
-|-------------|-----------------------------------|----------------------------------------------|
-| 자유 텍스트 | 자연어 코드 수정 요청 (메인 기능)  | Diff 미리보기 + 승인/거절 버튼              |
-| `/status`   | 현재 Lock 상태 + 마지막 작업 결과 | "🟢 대기 중. 마지막 작업: 커밋 완료"        |
-| `/cancel`   | 승인 대기 중인 작업 취소          | "🚫 작업이 취소되었습니다."                 |
+| 명령              | 설명                                          | 비고 |
+|-------------------|-----------------------------------------------|------|
+| 자유 텍스트       | 자연어 코드 수정 요청 (메인 기능)              | 2-step AI → Diff 미리보기 → 승인/거절 |
+| `/status`         | 현재 Lock 상태 + 마지막 작업 결과             | |
+| `/cancel`         | 승인 대기 중인 작업 취소, Lock 해제            | |
+| `/history`        | 최근 5건 수정 이력 (명령·파일·커밋) 조회      | |
+| `/undo`           | 마지막 커밋 git revert + 이력 제거             | |
+| `/show <경로>`    | 파일 내용 미리보기 (최대 50줄)                | 경로 생략 시 파일 목록 표시 |
+| `/analyze <경로>` | 파일 코드 품질 분석 (🔴경고/🟡주의/🟢제안)   | llama-3.3-70b 사용 |
+| `/npm <명령>`     | 화이트리스트 npm 명령 실행 (install/run 등)   | 5분 타임아웃 |
+| `/projects`       | 등록된 프로젝트 목록 조회                     | |
+| `/switch <이름>`  | 작업 대상 프로젝트 전환                       | .env PROJECT_<이름>=<경로> 등록 필요 |
 
 ### Diff 미리보기 메시지 포맷
 
@@ -189,15 +199,14 @@ telegram-coding-agent/
 ```json
 {
   "status": "ok | clarification_needed",
-  "clarificationQuestion": "string (status=clarification_needed 일 때만 존재)",
+  "action": "modify | create",
   "targetFiles": ["src/auth/login.js"],
-  "action": "modify_function | add_function | delete_function | modify_line | add_import | other",
   "description": "login 함수의 비밀번호 검증을 bcrypt.compare로 교체",
+  "clarificationQuestion": "A/B/C 선택지 포함 질문 (clarification_needed일 때만)",
   "changes": [
     {
       "file": "src/auth/login.js",
-      "type": "replace | insert | delete",
-      "targetIdentifier": "function login",
+      "type": "replace | insert | delete | create",
       "originalSnippet": "if (password === storedPassword) {",
       "newSnippet": "if (await bcrypt.compare(password, storedPassword)) {"
     }
@@ -205,6 +214,8 @@ telegram-coding-agent/
   "commitMessage": "feat: replace plain-text password check with bcrypt.compare in login"
 }
 ```
+
+> **v2.0 변경:** `targetIdentifier` 필드 제거 (미사용), `action` 값 `modify | create`로 단순화, `clarificationQuestion`에 A/B/C 선택지 포함 강제.
 
 ### Lock 상태 (lock.js)
 
@@ -219,9 +230,20 @@ let lastResult = '';        // /status 응답용
 
 ```
 TELEGRAM_BOT_TOKEN=...
-ALLOWED_USER_ID=123456789        # 단일 정수 ID
-ANTHROPIC_API_KEY=sk-ant-...
+ALLOWED_USER_ID=123456789           # 단일 정수 ID
+GROQ_API_KEY=gsk_...               # Groq 무료 API 키
 TARGET_PROJECT_PATH=C:\church-platform-main
+TARGET_PROJECT_NAME=default         # 선택. /projects 표시 이름
+GIT_USER_NAME=Telegram Bot          # 선택. git commit author
+GIT_USER_EMAIL=bot@example.com      # 선택.
+
+# 멀티 프로젝트 (선택)
+# PROJECT_api=C:\church-platform-main\api
+# PROJECT_front=C:\church-platform-main\front
+
+# Notion 로그 (선택)
+# NOTION_TOKEN=secret_...
+# NOTION_DATABASE_ID=...
 ```
 
 ---
@@ -231,11 +253,14 @@ TARGET_PROJECT_PATH=C:\church-platform-main
 | ID    | 상황                       | 처리 방식                                                                        |
 |-------|----------------------------|----------------------------------------------------------------------------------|
 | EC-01 | 타겟 파일 없음             | fs.readdirSync로 재귀 탐색, 유사 파일명 최대 3개 제안 역질문 전송               |
-| EC-02 | 다중 파일 수정             | 모든 변경을 단일 Diff 메시지에 요약, 단일 [✅ 승인] 버튼으로 일괄 처리          |
-| EC-03 | 모호한 자연어 명령         | AI Shim이 `clarification_needed` 반환, 구체적 선택지 포함 역질문 전송           |
+| EC-02 | 다중 파일 수정             | 파일별 개별 Diff + 개별 승인/거절 버튼 (부분 승인 지원)                          |
+| EC-03 | 모호한 자연어 명령         | AI Shim이 `clarification_needed` 반환, A/B/C 선택지 포함 역질문 전송            |
 | EC-04 | Git 커밋 실패             | 파일 저장 상태 유지(롤백 없음), "⚠️ 파일 수정 성공, 커밋 실패: [에러]" 전송    |
-| EC-05 | 작업 중 새 명령 도착       | `isLocked=true` 확인 후 "현재 이전 지시사항을 처리 중입니다. 완료 후 다시 명령해주세요 ⏳" 전송 |
+| EC-05 | 작업 중 새 명령 도착       | `isLocked=true` 확인 후 "현재 처리 중입니다 ⏳" 전송                            |
 | EC-06 | 미등록 User ID 접근        | 응답·로그 없이 완전 무시 (NFR-02)                                                |
+| EC-07 | 거절 후 피드백 입력        | 피드백을 주 지시사항으로 삼아 동일 파일 재생성 → 새 Diff 제시                   |
+| EC-08 | originalSnippet 불일치    | snippet_retry 경로 — AI가 파일 다시 읽고 코드 재생성, [🔄 재시도] 버튼 제공    |
+| EC-09 | PM2 재시작 감지            | `.crash_guard` 파일로 감지, 봇 기동 시 비정상 종료 여부 텔레그램 알림          |
 
 ---
 
@@ -373,31 +398,31 @@ index.js:
 **목표:** Claude API로 자연어 명령을 ShimResult JSON으로 변환
 
 ```javascript
-// aiShim.js
-const Anthropic = require('@anthropic-ai/sdk');
+// aiShim.js — 2-step Groq 호출
+const Groq = require('groq-sdk');
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-async function parseCommand(userMessage, fileTree) {
-  const client = new Anthropic();
-  
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 2048,
-    system: SYSTEM_PROMPT,  // ShimResult JSON 스키마 명시
-    messages: [
-      { role: 'user', content: `파일 트리:\n${fileTree}\n\n명령: ${userMessage}` }
-    ],
-  });
+// Step 1: 어떤 파일을 수정할지 파악 (빠른 소형 모델)
+async function identifyTargetFiles(userMessage, fileList, historyContext) {
+  return callGroq('llama-3.1-8b-instant', INTENT_PROMPT, userContent);
+}
 
-  return JSON.parse(response.content[0].text); // ShimResult
+// Step 2: 실제 파일 내용 기반으로 코드 변경 생성 (대형 모델)
+async function generateChanges(userMessage, description, fileContents, historyContext) {
+  return callGroq('llama-3.3-70b-versatile', CHANGES_PROMPT, userContent);
 }
 ```
 
 ```
-System Prompt 포함 내용:
-- 역할: 코드 수정 의도 분석기
-- 출력: 반드시 ShimResult JSON만 반환
-- 모호하면 status=clarification_needed + clarificationQuestion 반환
-- JSON 스키마 (§8 참조)
+INTENT_PROMPT 핵심:
+- XML 구조화 (<role> <instructions> <output_schema> <examples>)
+- 이전 대화 기록 포맷 명시 (방금/이전/그거 참조 처리)
+- clarificationQuestion에 A/B/C 선택지 강제
+
+CHANGES_PROMPT 핵심:
+- insert = 파일 끝 추가만 가능 (중간 삽입 시 replace 사용 명시)
+- originalSnippet 중복 시 범위 확장 요구
+- targetIdentifier 필드 없음 (미사용이므로 제거)
 ```
 
 **완료 기준:** 명확한 명령 → `status: "ok"` + `changes[]` 반환,  
