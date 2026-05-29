@@ -12,7 +12,7 @@ export const commentApi = {
       params,
     }),
   create: (menuId, boardId, info) =>
-    axiosInstance.post(`/board/menu/${menuId}/basic/${boardId}/comment`, info),
+    axiosInstance.post(`/board/menu/${menuId}/basic/${boardId}/comment`, info).then((res) => console.log('생성 성공')).catch((err) => console.log('생성 실패')),
   update: (menuId, boardId, commentId, info) =>
     axiosInstance.put(
       `/board/menu/${menuId}/basic/${boardId}/comment/${commentId}`,

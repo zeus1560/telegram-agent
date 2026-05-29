@@ -19,7 +19,7 @@ export const boardApi = {
       headers: {
         'Content-Type': `application/json`,
       },
-    }),
+    }).then((res) => console.log('수정 성공')).catch((err) => console.log('수정 실패'))
   detail: (menuId, boardId) =>
     axiosInstance.get(`/board/menu/${menuId}/basic/${boardId}`),
   delete: (menuId, boardId) =>
