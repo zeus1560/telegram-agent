@@ -11,7 +11,7 @@ import ErrorFallback from './components/frame/ErrorFallback';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 0,
+      retry: 2,
       useErrorBoundary: true,
       refetchOnWindowFocus: false,
     },
