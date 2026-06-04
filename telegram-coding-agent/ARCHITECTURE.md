@@ -46,8 +46,12 @@ PC 앞에 없어도 스마트폰으로 로컬 프로젝트를 수정하고 커�
         │
   [✅ 승인]          [❌ 거절]
         │                  │
-  파일 저장           변경 없음
-  git commit
+  파일 저장     피드백 대기 상태로 전환
+  git commit          │
+                사용자 피드백 입력
+                      │
+                      └──▶ [ AI Shim (코딩 에이전트) ]
+                             피드백 반영 재생성 후 Diff 재전송
 ```
 
 ---
@@ -104,7 +108,11 @@ Telegraf는 Node.js 텔레그램 봇 라이브러리 중 TypeScript 지원, 미�
 
 **원인 분석:** LLM이 `\\`(올바른 이스케이프)와 `\c`(잘못된 이스케이프)를 혼재해서 출력합니다. 처음 작성한 정규식이 `\\` 쌍의 두 번째 백슬래시까지 건드려서 오히려 더 망가뜨렸습니다.
 
-**해결:** `\([\s\S])` 패턴으로 **백슬래시+다음 문자 쌍을 통째로** 읽어서, 유효한 이스케이프(`"`, `\`, `/`, `b`, `f`, `n`, `r`, `t`, `u`)면 유지하고 나머지는 `\\`로 교체하는 `sanitizeJson()` 함수를 작성했습니다.
+**해결 — 2단계 방어:**
+
+1차: `response_format: { type: 'json_object' }` 옵션으로 API 레벨에서 valid JSON 반환을 강제합니다. LLM이 마크다운 블록이나 잘못된 이스케이프를 출력할 수 없습니다.
+
+2차: `sanitizeJson()` 함수를 fallback으로 유지합니다. `\([\s\S])` 패턴으로 백슬래시+다음 문자 쌍을 통째로 읽어서, 유효한 이스케이프(`"`, `\`, `/`, `b`, `f`, `n`, `r`, `t`, `u`)면 유지하고 나머지는 `\\`로 교체합니다.
 
 ### 문제 3 — 파일 수가 많아지면 파일이 잘림
 
@@ -121,13 +129,16 @@ Telegraf는 Node.js 텔레그램 봇 라이브러리 중 TypeScript 지원, 미�
 | `index.js` | 봇 초기화, Long-polling 시작, graceful shutdown |
 | `config.js` | 환경변수 로드 및 누락 시 즉시 종료 |
 | `security.js` | User ID 검증 — 미등록 ID는 응답·로그 없이 무시 |
-| `lock.js` | 인메모리 Lock — 동시 명령 차단, 승인 대기 상태 보관 |
-| `aiShim.js` | Groq API 2단계 호출, JSON 파싱 안전장치 |
+| `lock.js` | 인메모리 Lock — 동시 명령 차단, 승인·피드백·부분승인 상태 보관 |
+| `aiShim.js` | Groq API 2단계 호출, JSON mode 1차 방어 + sanitizeJson 2차 방어 |
 | `fileOps.js` | 파일 읽기·쓰기·퍼지탐색·소스 파일 목록 생성 |
 | `diffUtils.js` | unified diff 생성, 텔레그램 메시지 포맷 |
 | `gitHandler.js` | simple-git으로 자동 커밋, 실패 시 파일 유지 |
-| `botHandlers.js` | 승인·거절·/status·/cancel 핸들러 |
-| `orchestrator.js` | 전체 파이프라인 조율 (보안 → Lock → AI → Diff → 승인) |
+| `botHandlers.js` | 승인·거절·/status·/cancel·/analyze·/history·/switch 핸들러 |
+| `orchestrator.js` | 전체 파이프라인 조율 (보안 → Lock → AI → Diff → 승인 → 피드백 루프) |
+| `conversationHistory.js` | 최근 수정 내역 5건 유지 — AI 파일 위치 추론 및 /undo·/history에 활용 |
+| `projectState.js` | 현재 활성 프로젝트 경로·이름 관리 — /switch로 전환 가능 |
+| `prompts.js` | Groq 시스템 프롬프트 상수 분리 — 로직과 독립적으로 버전관리 |
 
 ---
 

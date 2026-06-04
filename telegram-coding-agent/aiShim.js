@@ -59,14 +59,18 @@ function sanitizeJson(raw) {
 
 /**
  * Groq API를 호출하고 응답을 JSON으로 파싱한다.
+ * 1차 방어: response_format json_object로 API 레벨에서 valid JSON 강제.
+ * 2차 방어: sanitizeJson으로 마크다운 블록 제거 및 이스케이프 정규화.
  * 파싱 실패 시 clarification_needed 폴백 객체를 반환한다.
  * @param {string} model Groq 모델 ID
  * @param {string} systemPrompt 시스템 프롬프트
  * @param {string} userContent 사용자 입력 내용
+ * @param {string} [label] 콘솔 타이밍 출력용 레이블
  * @returns {Promise<object>}
  */
-async function callGroq(model, systemPrompt, userContent) {
+async function callGroq(model, systemPrompt, userContent, label = model) {
   let response;
+  const t0 = Date.now();
   try {
     response = await groq.chat.completions.create({
       model,
@@ -75,6 +79,7 @@ async function callGroq(model, systemPrompt, userContent) {
         { role: 'user', content: userContent },
       ],
       temperature: 0,
+      response_format: { type: 'json_object' },
     });
   } catch (err) {
     if (err.status === 429) throw new Error('AI API 요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.');
@@ -83,6 +88,9 @@ async function callGroq(model, systemPrompt, userContent) {
     }
     throw new Error(`AI API 호출 실패: ${err.message}`);
   }
+  const elapsed = Date.now() - t0;
+  console.log(`[AI ${label}] 완료 — ${elapsed}ms`);
+
   const raw = response.choices[0].message.content;
   const text = sanitizeJson(raw);
   try {
@@ -113,7 +121,8 @@ async function identifyTargetFiles(userMessage, fileList, historyContext = '') {
   return callGroq(
     'llama-3.1-8b-instant',
     INTENT_PROMPT,
-    `[존재하는 파일 목록 — 이 경로만 사용할 것]\n${truncateTree(fileList)}${historySection}\n\n[현재 명령 — 반드시 이것만 따를 것]\n${userMessage}`
+    `[존재하는 파일 목록 — 이 경로만 사용할 것]\n${truncateTree(fileList)}${historySection}\n\n[현재 명령 — 반드시 이것만 따를 것]\n${userMessage}`,
+    '1단계 llama-8b'
   );
 }
 
@@ -135,7 +144,8 @@ async function generateChanges(userMessage, description, fileContents, historyCo
   return callGroq(
     'llama-3.3-70b-versatile',
     CHANGES_PROMPT,
-    `[현재 명령 — 반드시 이것만 따를 것]\n${userMessage}\n\n[수정 의도]\n${description}${historySection}\n\n[실제 파일 내용]\n${filesSection}`
+    `[현재 명령 — 반드시 이것만 따를 것]\n${userMessage}\n\n[수정 의도]\n${description}${historySection}\n\n[실제 파일 내용]\n${filesSection}`,
+    '2단계 llama-70b'
   );
 }
 
