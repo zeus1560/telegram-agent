@@ -1,6 +1,6 @@
 {
   "name": "platform-api",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Church Platform API Server",
   "scripts": {
     "start": "node src/init.js",
